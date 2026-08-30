@@ -41,6 +41,12 @@ export class Player {
     this.wishZ = 0;
     this.whiffing = 0;
     this.home = new THREE.Vector3();
+    this._groundContact = 0;
+    this.body.addEventListener("collide", (e) => {
+      const n = e.contact.ni;
+      const ny = this.body === e.contact.bi ? n.y : -n.y;
+      if (ny > 0.55) this._groundContact = 0.1;
+    });
   }
 
   get position() {
@@ -72,6 +78,8 @@ export class Player {
     this.whiffing = 0;
     this.wishX = 0;
     this.wishZ = 0;
+    this._groundContact = 0;
+    this.grounded = true;
     this.facing = faceHomeGoal ? Math.PI / 2 : -Math.PI / 2;
     this.mesh.rotation.y = this.facing;
   }
@@ -118,7 +126,10 @@ export class Player {
       return;
     }
 
-    const t = 1 - Math.exp(-10 * dt);
+    const horizNow = Math.hypot(v.x, v.z);
+    const commit = Math.min(1, horizNow / Math.max(1, max));
+    const rate = 14 - commit * 7;
+    const t = 1 - Math.exp(-rate * dt);
     v.x += (wishX * max - v.x) * t;
     v.z += (wishZ * max - v.z) * t;
 
@@ -136,7 +147,12 @@ export class Player {
     this.tackleCd = Math.max(0, this.tackleCd - dt);
     this.kickLock = Math.max(0, this.kickLock - dt);
     this.whiffing = Math.max(0, this.whiffing - dt);
-    this.grounded = this.body.position.y < 0.12 && v.y <= 0.4;
+    if (this._groundContact > 0) {
+      this._groundContact -= dt;
+      this.grounded = v.y <= 0.55;
+    } else {
+      this.grounded = this.body.position.y < 0.12 && v.y <= 0.4;
+    }
   }
 
   jump() {
@@ -189,6 +205,7 @@ export class Player {
     }
     this.anim.update(dt, {
       speed: this.speed(),
+      vy: this.body.velocity.y,
       grounded: this.grounded,
       kicking: this.kickLock > 0.12,
       sliding: this.sliding > 0,

@@ -38,6 +38,7 @@ export const PITCH = {
 export const BALL = {
   radius: 0.28,
   mass: 0.45,
+  magnus: 0.022,
 };
 
 export const PLAYER = {
@@ -57,9 +58,9 @@ export const PLAYER = {
   throughPower: 24,
   passArriveSpeed: 11,
   passMaxRange: 36,
-  shotPowerMin: 9,
-  shotPowerMax: 38,
-  jumpSpeed: 7.2,
+  shotPowerMin: 10,
+  shotPowerMax: 40,
+  jumpSpeed: 5.8,
   tackleSpeed: 13.5,
   tackleDuration: 0.42,
   tackleCooldown: 1.35,

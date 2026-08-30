@@ -412,12 +412,15 @@ export class Game {
     } else {
       dir = this.shotAim(player, aim);
       const t = Math.min(1, Math.max(0, charge));
-      power = PLAYER.shotPowerMin + t * (PLAYER.shotPowerMax - PLAYER.shotPowerMin) + player.speed() * 0.28;
-      loft = 0.32 + t * t * 9.4;
-      spread = (1 - t) * 0.07;
+      power = PLAYER.shotPowerMin + t * (PLAYER.shotPowerMax - PLAYER.shotPowerMin) + player.speed() * 0.16;
+      loft = 0.3 + t * 0.65;
+      const face = player.faceDir();
+      const sideSlip = Math.abs(face.x * player.body.velocity.z - face.z * player.body.velocity.x) / 8;
+      spread = (1 - t) * 0.07 + sideSlip * 0.05 + (player.stun > 0 ? 0.06 : 0);
       this.match.shots[player.team] += 1;
       this._dribbleLock = 0.42;
       this._passAssist = null;
+      this.cam.punch(0.28 + t * 0.5);
     }
 
     const n = Math.hypot(dir.x, dir.z) || 1;
@@ -427,19 +430,39 @@ export class Game {
       loft,
       dir.z * power + (Math.random() - 0.5) * spread * power
     );
-    b.angularVelocity.set(-dir.z * (8 + charge * 16), dir.x * 10, dir.x * 6);
+    const face = player.faceDir();
+    const sidespin = aim.x * face.z - aim.z * face.x;
+    b.angularVelocity.set(
+      -dir.z * (8 + charge * 16),
+      sidespin * (16 + charge * 22) + dir.x * 6,
+      dir.x * 6
+    );
     b.position.y = Math.max(b.position.y, BALL.radius + (kind === "shot" ? charge * 0.12 : 0));
     b.wakeUp();
     this.match.lastTouch = player.team;
     player.kickLock = 0.28;
     player.facing = Math.atan2(dir.x, dir.z);
     this.audio?.kick();
+    if (kind === "pass") this.cam.punch(0.18);
+    if (kind === "through") this.cam.punch(0.24);
     if (player.human && receiver && (kind === "pass" || kind === "through")) {
       this.setControlled(player.pad, receiver);
       this._holdSwitch = 1.8;
       this._pendingSwitch = null;
     }
     return true;
+  }
+
+  applyMagnus(dt) {
+    if (this._dribbler) return;
+    const v = this.ballBody.velocity;
+    const w = this.ballBody.angularVelocity;
+    const spd = Math.hypot(v.x, v.y, v.z);
+    if (spd < 2) return;
+    const k = BALL.magnus;
+    v.x += (w.y * v.z - w.z * v.y) * k * dt;
+    v.y += (w.z * v.x - w.x * v.z) * k * 0.35 * dt;
+    v.z += (w.x * v.y - w.y * v.x) * k * dt;
   }
 
   releaseDribble() {
@@ -531,6 +554,7 @@ export class Game {
     b.velocity.set(dir.x * 11, 1.1, dir.z * 11);
     this.match.lastTouch = player.team;
     this.audio?.kick();
+    this.cam.punch(0.32);
   }
 
   tryTackleContact(player) {
@@ -593,7 +617,7 @@ export class Game {
       p.celebrating = p.team === team;
     });
     this.burst.spawn(b.x, 1.4, b.z, team === "home" ? 0xdc2626 : 0x2563eb);
-    this.cam.punch(0.7);
+    this.cam.punch(0.85);
     this.audio?.goal();
     this.emit("goal");
   }
@@ -647,6 +671,7 @@ export class Game {
 
     if (m.goalLock > 0) {
       m.goalLock -= dt;
+      this.applyMagnus(dt);
       this.physics.world.step(1 / 60, dt, 3);
       this.syncMeshes(dt);
       if (m.goalLock <= 0) {
@@ -690,7 +715,10 @@ export class Game {
         if (Math.hypot(wishX, wishZ) > 0.2) player.facing = Math.atan2(wishX, wishZ);
         sprinting = wish.sprinting;
         if (input.jump) player.jump();
-        if (input.tackle && player.tackle()) this.audio?.tackle();
+        if (input.tackle && player.tackle()) {
+          this.audio?.tackle();
+          this.cam.punch(0.42);
+        }
         if (input.pass) {
           player.charging = false;
           player.charge = 0;
@@ -720,7 +748,10 @@ export class Game {
         wishZ = ai.wishZ;
         sprinting = ai.sprinting;
         if (ai.jump) player.jump();
-        if (ai.tackle && player.tackle()) this.audio?.tackle();
+        if (ai.tackle && player.tackle()) {
+          this.audio?.tackle();
+          this.cam.punch(0.36);
+        }
         if (ai.kick > 0) this.kickBall(player, ai.kick);
       }
       const hasBall =
@@ -743,6 +774,7 @@ export class Game {
     this.autoSwitchDefense(0);
     if (m.twoPlayer) this.autoSwitchDefense(1);
 
+    this.applyMagnus(dt);
     this.physics.world.step(1 / 60, dt, 3);
     this._dribbleLock = Math.max(0, this._dribbleLock - dt);
     this.guidePass(dt);

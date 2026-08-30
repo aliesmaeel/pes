@@ -19,13 +19,13 @@ export function createPhysics() {
   world.addContactMaterial(
     new CANNON.ContactMaterial(ballMat, groundMat, {
       friction: 0.42,
-      restitution: 0.38,
+      restitution: 0.5,
     })
   );
   world.addContactMaterial(
     new CANNON.ContactMaterial(ballMat, playerMat, {
-      friction: 0.08,
-      restitution: 0.02,
+      friction: 0.15,
+      restitution: 0.08,
     })
   );
   world.addContactMaterial(

@@ -92,6 +92,8 @@ src/
     animationController.js  Clip crossfades
 ```
 
-Player visuals load from `src/assets/player.glb` (Mixamo Idle / Walk / Run). See `CREDITS.md`. Replace that file with a Mixamo-rigged soccer mesh to change the look without touching gameplay.
+Player visuals load from `src/assets/player.glb` (Mixamo Idle / Walk / Run). See `CREDITS.md`.
+
+Five Mixamo FBX clips in `src/assets/anims/` are merged at load time (`extraClips.js`) as **Kick, Tackle, Pass, Jump, StandUp** — no Blender step required. To bake them into the `.glb` (handoff Part A), use Blender or run `npm run merge-player` (see `scripts/merge-player-glb.mjs`; restores textures from `player-base.glb` if needed).
 
 Progress (wins, losses, kits) is stored in the browser under `strike3d-career`.

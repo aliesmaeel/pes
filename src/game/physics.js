@@ -46,20 +46,44 @@ export function createPhysics() {
       restitution: 0,
     })
   );
+  world.addContactMaterial(
+    new CANNON.ContactMaterial(playerMat, boardMat, {
+      friction: 0.55,
+      restitution: 0,
+    })
+  );
+  world.addContactMaterial(
+    new CANNON.ContactMaterial(playerMat, postMat, {
+      friction: 0.45,
+      restitution: 0,
+    })
+  );
 
   const halfL = PITCH.length / 2;
   const halfW = PITCH.width / 2;
   const gw = PITCH.goalWidth / 2;
   const gh = PITCH.goalHeight;
   const gd = PITCH.goalDepth;
+  const inset = PITCH.boardInset;
+  const wallHalf = PITCH.boardThickness / 2 + 0.05;
 
-  const ground = new CANNON.Body({ mass: 0, material: groundMat });
+  const ground = new CANNON.Body({
+    mass: 0,
+    material: groundMat,
+    collisionFilterGroup: GROUP_WORLD,
+    collisionFilterMask: GROUP_PLAYER | GROUP_BALL,
+  });
   ground.addShape(new CANNON.Plane());
   ground.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
   world.addBody(ground);
 
   const wall = (x, z, sx, sz, y = 1.2, mat = boardMat) => {
-    const body = new CANNON.Body({ mass: 0, material: mat });
+    const body = new CANNON.Body({
+      mass: 0,
+      material: mat,
+      collisionFilterGroup: GROUP_WORLD,
+      collisionFilterMask: GROUP_PLAYER | GROUP_BALL,
+    });
     body.addShape(new CANNON.Box(new CANNON.Vec3(sx, y, sz)));
     body.position.set(x, y, z);
     world.addBody(body);
@@ -67,20 +91,24 @@ export function createPhysics() {
   };
 
   const boardH = PITCH.wallHeight / 2;
-  const thick = 0.32;
-  wall(0, halfW + thick, halfL + 1.2, thick, boardH);
-  wall(0, -halfW - thick, halfL + 1.2, thick, boardH);
+  wall(0, halfW + inset + wallHalf, halfL + 1.2, wallHalf, boardH);
+  wall(0, -(halfW + inset + wallHalf), halfL + 1.2, wallHalf, boardH);
 
   const end = (sign) => {
-    const x = sign * (halfL + thick);
+    const x = sign * (halfL + inset + wallHalf);
     const span = halfW - gw;
-    wall(x, (gw + halfW) / 2, thick, span / 2 + 0.12, boardH);
-    wall(x, -(gw + halfW) / 2, thick, span / 2 + 0.12, boardH);
+    wall(x, (gw + halfW) / 2, wallHalf, span / 2 + 0.12, boardH);
+    wall(x, -(gw + halfW) / 2, wallHalf, span / 2 + 0.12, boardH);
     wall(sign * (halfL + gd), 0, 0.3, gw + 0.15, gh / 2, postMat);
     wall(sign * (halfL + gd / 2), gw, gd / 2 + 0.1, 0.12, gh / 2, postMat);
     wall(sign * (halfL + gd / 2), -gw, gd / 2 + 0.1, 0.12, gh / 2, postMat);
 
-    const bar = new CANNON.Body({ mass: 0, material: postMat });
+    const bar = new CANNON.Body({
+      mass: 0,
+      material: postMat,
+      collisionFilterGroup: GROUP_WORLD,
+      collisionFilterMask: GROUP_PLAYER | GROUP_BALL,
+    });
     bar.addShape(new CANNON.Box(new CANNON.Vec3(0.12, 0.1, gw + 0.12)));
     bar.position.set(sign * halfL, gh, 0);
     world.addBody(bar);
@@ -99,11 +127,13 @@ export function createBallBody(world, ballMat) {
   const body = new CANNON.Body({
     mass: BALL.mass,
     material: ballMat,
-    linearDamping: 0.22,
+    linearDamping: BALL.linearDamping,
     angularDamping: 0.28,
     allowSleep: true,
     collisionFilterGroup: GROUP_BALL,
     collisionFilterMask: GROUP_WORLD | GROUP_PLAYER,
+    ccdSpeedThreshold: 0.8,
+    ccdIterations: 4,
   });
   body.addShape(new CANNON.Sphere(BALL.radius));
   body.position.set(0, BALL.radius + 0.02, 0);

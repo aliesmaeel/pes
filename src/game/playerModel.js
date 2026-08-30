@@ -4,6 +4,7 @@ import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import { PLAYER } from "../config.js";
 import playerUrl from "../assets/player.glb?url";
 import { attachPlayerOverlays } from "./mesh.js";
+import { mergeExtraClips } from "./extraClips.js";
 
 let cached = null;
 let loadPromise = null;
@@ -27,7 +28,7 @@ function collectBones(root) {
   const bones = {};
   root.traverse((obj) => {
     if (!obj.isBone) return;
-    bones[obj.name.replace(/^mixamorig:/, "")] = obj;
+    bones[obj.name.replace(/^mixamorig:?/, "")] = obj;
   });
   return bones;
 }
@@ -104,10 +105,11 @@ export function loadPlayerModel() {
     const loader = new GLTFLoader();
     loader.load(
       playerUrl,
-      (gltf) => {
-        const names = gltf.animations.map((c) => c.name);
-        console.info("[player.glb] clips:", names);
-        cached = { scene: gltf.scene, animations: gltf.animations, names };
+      async (gltf) => {
+        const animations = await mergeExtraClips(gltf);
+        const names = animations.map((c) => c.name);
+        console.info("[player clips]", names);
+        cached = { scene: gltf.scene, animations, names };
         resolve(cached);
       },
       undefined,
@@ -115,6 +117,13 @@ export function loadPlayerModel() {
     );
   });
   return loadPromise;
+}
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    cached = null;
+    loadPromise = null;
+  });
 }
 
 export function isPlayerModelReady() {
@@ -145,12 +154,22 @@ export function createPlayerModel({ kit, number }) {
     idle: pickClip(clips, ["idle"]) && mixer.clipAction(pickClip(clips, ["idle"])),
     walk: pickClip(clips, ["walk", "walking"]) && mixer.clipAction(pickClip(clips, ["walk", "walking"])),
     run: pickClip(clips, ["run", "running", "sprint"]) && mixer.clipAction(pickClip(clips, ["run", "running", "sprint"])),
-    jump: pickClip(clips, ["jump"]) && mixer.clipAction(pickClip(clips, ["jump"])),
-    kick: pickClip(clips, ["kick", "soccerpass", "attack"]) && mixer.clipAction(pickClip(clips, ["kick", "soccerpass", "attack"])),
-    slide: pickClip(clips, ["slide", "tackle", "fall"]) && mixer.clipAction(pickClip(clips, ["slide", "tackle", "fall"])),
+    jump: pickClip(clips, ["jump", "header"]) && mixer.clipAction(pickClip(clips, ["jump", "header"])),
+    kick: pickClip(clips, ["kick", "attack", "strike"]) && mixer.clipAction(pickClip(clips, ["kick", "attack", "strike"])),
+    pass: pickClip(clips, ["pass", "passing", "footballpass"]) && mixer.clipAction(pickClip(clips, ["pass", "passing", "footballpass"])),
+    standUp: pickClip(clips, ["standup", "standingup", "getup"]) &&
+      mixer.clipAction(pickClip(clips, ["standup", "standingup", "getup"])),
+    slide: pickClip(clips, ["slide", "tackle", "fall", "dive"]) &&
+      mixer.clipAction(pickClip(clips, ["slide", "tackle", "fall", "dive"])),
     celebrate: pickClip(clips, ["celebrate", "dance", "victory"]) && mixer.clipAction(pickClip(clips, ["celebrate", "dance", "victory"])),
   };
+  for (const name of ["kick", "pass", "jump", "celebrate", "standUp", "slide"]) {
+    const action = actions[name];
+    if (!action) continue;
+    action.setLoop(THREE.LoopOnce, 1);
+    action.clampWhenFinished = true;
+  }
 
   const overlays = attachPlayerOverlays(root, { number, markerY: PLAYER.height + 0.45 });
-  return { root, mixer, actions, bones: collectBones(cloned), ...overlays };
+  return { root, rig: cloned, mixer, actions, bones: collectBones(cloned), ...overlays };
 }

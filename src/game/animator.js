@@ -1,3 +1,5 @@
+import { PLAYER } from "../config.js";
+
 const STRIDE = 1.28;
 const HIPS_Y = 0.92;
 const TORSO_Y = 0.34;
@@ -13,6 +15,7 @@ export class Animator {
     this.distance = 0;
     this.kickBlend = 0;
     this.slideT = 0;
+    this.recoverT = 0;
     this.loco = {
       lThigh: 0,
       rThigh: 0,
@@ -52,17 +55,65 @@ export class Animator {
     }
 
     if (state.sliding) {
-      this.slideT = Math.min(1, this.slideT + dt * 6);
-      hips.rotation.x = this.slideT * 1.15;
-      hips.position.y = 0.55;
+      this.slideT = Math.min(1, this.slideT + dt / PLAYER.tackleDuration);
+      this.recoverT = 0;
+      const t = this.slideT;
+      const slideEnd = 1;
+      let drop = 0;
+      let lean = 0;
+      let extend = 0;
+      let tuck = 0;
+      let arms = 0;
+      if (t < 0.2) {
+        const p = t / 0.2;
+        drop = p;
+        lean = p * 0.2;
+      } else if (t < slideEnd) {
+        drop = 1;
+        lean = 0.22;
+        extend = 1;
+        tuck = 1;
+        arms = 1;
+      }
+      hips.rotation.x = -0.42 * drop;
+      hips.position.y = HIPS_Y - 0.38 * drop;
       torso.position.y = TORSO_Y;
-      rightLeg.thigh.rotation.x = 0.9;
-      leftLeg.thigh.rotation.x = -0.2;
-      rightArm.shoulder.rotation.x = -0.8;
-      leftArm.shoulder.rotation.x = 0.4;
+      torso.rotation.x = 0.28 * lean;
+      rightLeg.thigh.rotation.x = -1.2 * extend;
+      rightLeg.knee.rotation.x = 0.1 * extend;
+      leftLeg.thigh.rotation.x = 0.72 * tuck;
+      leftLeg.knee.rotation.x = 1.0 * tuck;
+      leftArm.shoulder.rotation.x = -0.7 * arms;
+      leftArm.shoulder.rotation.z = -0.38 * arms;
+      rightArm.shoulder.rotation.x = -0.55 * arms;
+      rightArm.shoulder.rotation.z = 0.32 * arms;
+      return;
+    }
+    if (state.recovering) {
+      this.slideT = 0;
+      const rise = 1 - Math.min(1, state.recovering / PLAYER.standUpDuration);
+      this.recoverT = rise;
+      const drop = 1 - rise;
+      const lean = 0.22 * drop;
+      const extend = drop;
+      const tuck = drop;
+      const arms = drop;
+      hips.rotation.x = -0.42 * drop;
+      hips.position.y = HIPS_Y - 0.38 * drop;
+      torso.position.y = TORSO_Y;
+      torso.rotation.x = 0.28 * lean;
+      rightLeg.thigh.rotation.x = -1.2 * extend;
+      rightLeg.knee.rotation.x = 0.1 * extend;
+      leftLeg.thigh.rotation.x = 0.72 * tuck;
+      leftLeg.knee.rotation.x = 1.0 * tuck;
+      leftArm.shoulder.rotation.x = -0.7 * arms;
+      leftArm.shoulder.rotation.z = -0.38 * arms;
+      rightArm.shoulder.rotation.x = -0.55 * arms;
+      rightArm.shoulder.rotation.z = 0.32 * arms;
       return;
     }
     this.slideT = 0;
+    this.recoverT = 0;
 
     const phase = (this.distance / STRIDE) * Math.PI * 2;
     const loc = this.loco;

@@ -135,11 +135,11 @@ export function attachPlayerOverlays(root, { number, markerY = 2.15 } = {}) {
   root.add(passTarget);
 
   const charge = new THREE.Mesh(
-    new THREE.RingGeometry(0.34, 0.42, 24),
-    new THREE.MeshBasicMaterial({ color: 0xf59e0b, side: THREE.DoubleSide, transparent: true, opacity: 0.85 })
+    new THREE.RingGeometry(0.55, 0.78, 28),
+    new THREE.MeshBasicMaterial({ color: 0xf59e0b, side: THREE.DoubleSide, transparent: true, opacity: 0.95 })
   );
   charge.rotation.x = -Math.PI / 2;
-  charge.position.y = 0.08;
+  charge.position.y = 0.1;
   charge.visible = false;
   root.add(charge);
 

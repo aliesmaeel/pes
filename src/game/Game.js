@@ -6,6 +6,7 @@ import { MatchCamera } from "./camera.js";
 import { Input } from "./input.js";
 import { Burst } from "./particles.js";
 import { createLights, createPitch } from "./pitch.js";
+import { clampInsideBoards, fieldLimit } from "./pitchBounds.js";
 import { createBallBody, createPhysics, createPlayerBody, GROUP_BALL, GROUP_PLAYER, GROUP_WORLD } from "./physics.js";
 import { Player } from "./player.js";
 
@@ -64,6 +65,8 @@ export class Game {
     this._holdSwitch = 0;
     this._dribbler = null;
     this._dribbleLock = 0;
+    this._kickCarry = null;
+    this._kickCollider = null;
     this._passAssist = null;
     this._onResize = () => this.resize();
     window.addEventListener("resize", this._onResize);
@@ -158,6 +161,8 @@ export class Game {
     this._holdSwitch = 0;
     this.releaseDribble();
     this._dribbleLock = 0;
+    this._kickCarry = null;
+    this._kickCollider = null;
     this._passAssist = null;
     this.spawnLineup(this.match);
     this.resetKickoff("home");
@@ -174,6 +179,11 @@ export class Game {
     this.ballBody.position.set(0, BALL.radius + 0.04, 0);
     this.releaseDribble();
     this._passAssist = null;
+    this._kickCarry = null;
+    if (this._kickCollider) {
+      this._kickCollider.player.body.collisionFilterMask = GROUP_WORLD | GROUP_PLAYER | GROUP_BALL;
+      this._kickCollider = null;
+    }
     this.players.forEach((p) => {
       let x = p.home.x;
       let z = p.home.z;
@@ -385,8 +395,6 @@ export class Game {
     let spread = 0.04;
     let receiver = null;
 
-    this._dribbleLock = Math.max(this._dribbleLock, kind === "shot" ? 0.42 : 0.18);
-
     if (kind === "pass") {
       receiver = this.passReceiver(player, aim);
       if (receiver) {
@@ -413,18 +421,28 @@ export class Game {
       dir = this.shotAim(player, aim);
       const t = Math.min(1, Math.max(0, charge));
       power = PLAYER.shotPowerMin + t * (PLAYER.shotPowerMax - PLAYER.shotPowerMin) + player.speed() * 0.16;
-      loft = 0.3 + t * 0.65;
+      loft = 0.3 + t * t * 0.9;
+      if (player.human) console.info("[shot]", { charge: Number(t.toFixed(2)), power: Number(power.toFixed(1)), loft: Number(loft.toFixed(2)) });
       const face = player.faceDir();
       const sideSlip = Math.abs(face.x * player.body.velocity.z - face.z * player.body.velocity.x) / 8;
       spread = (1 - t) * 0.07 + sideSlip * 0.05 + (player.stun > 0 ? 0.06 : 0);
       this.match.shots[player.team] += 1;
-      this._dribbleLock = 0.42;
       this._passAssist = null;
       this.cam.punch(0.28 + t * 0.5);
     }
 
+    this._dribbleLock = Math.max(
+      this._dribbleLock,
+      kind === "shot" ? 0.22 + Math.max(0, power - 24) / 55 : kind === "through" ? 0.16 : 0.12
+    );
+
     const n = Math.hypot(dir.x, dir.z) || 1;
     dir = { x: dir.x / n, z: dir.z / n };
+    if (kind === "shot" && power > 22) {
+      const clearance = PLAYER.radius + BALL.radius + 0.06;
+      b.position.x += dir.x * clearance;
+      b.position.z += dir.z * clearance;
+    }
     b.velocity.set(
       dir.x * power + (Math.random() - 0.5) * spread * power,
       loft,
@@ -439,8 +457,16 @@ export class Game {
     );
     b.position.y = Math.max(b.position.y, BALL.radius + (kind === "shot" ? charge * 0.12 : 0));
     b.wakeUp();
+    if (kind === "shot" && power > 22) {
+      player.body.collisionFilterMask = GROUP_WORLD | GROUP_PLAYER;
+      this._kickCollider = { player, time: 0.2 };
+      this._kickCarry = { player, time: 0.22 + Math.max(0, power - 26) / 75 };
+    } else {
+      this._kickCarry = null;
+    }
     this.match.lastTouch = player.team;
-    player.kickLock = 0.28;
+    player.kickKind = kind === "through" ? "pass" : kind;
+    player.kickLock = kind === "shot" ? 0.32 : 0.55;
     player.facing = Math.atan2(dir.x, dir.z);
     this.audio?.kick();
     if (kind === "pass") this.cam.punch(0.18);
@@ -463,6 +489,20 @@ export class Game {
     v.x += (w.y * v.z - w.z * v.y) * k * dt;
     v.y += (w.z * v.x - w.x * v.z) * k * 0.35 * dt;
     v.z += (w.x * v.y - w.y * v.x) * k * dt;
+  }
+
+  tickKickState(dt) {
+    if (this._kickCarry) {
+      this._kickCarry.time -= dt;
+      if (this._kickCarry.time <= 0) this._kickCarry = null;
+    }
+    if (this._kickCollider) {
+      this._kickCollider.time -= dt;
+      if (this._kickCollider.time <= 0) {
+        this._kickCollider.player.body.collisionFilterMask = GROUP_WORLD | GROUP_PLAYER | GROUP_BALL;
+        this._kickCollider = null;
+      }
+    }
   }
 
   releaseDribble() {
@@ -504,6 +544,7 @@ export class Game {
     let bestD = PLAYER.controlRadius;
     for (const p of this.players) {
       if (p === passer || p.sliding > 0 || p.stun > 0 || p.kickLock > 0.08) continue;
+      if (this._kickCarry?.player === p && this._kickCarry.time > 0) continue;
       const d = dist(p.position.x, p.position.z, b.position.x, b.position.z);
       if (d < bestD) {
         bestD = d;
@@ -578,26 +619,32 @@ export class Game {
     const halfW = PITCH.width / 2;
     const gw = PITCH.goalWidth / 2 - 0.08;
     const b = this.ballBody;
-    const r = BALL.radius + 0.02;
+    const ballR = BALL.radius + 0.01;
     const bounce = 0.88;
     const inMouth = Math.abs(b.position.z) < gw && b.position.y < PITCH.goalHeight + 0.05;
+    const maxBallZ = fieldLimit(halfW, ballR);
+    const maxBallX = fieldLimit(halfL, ballR);
 
-    if (Math.abs(b.position.z) > halfW - r) {
-      b.position.z = Math.sign(b.position.z || 1) * (halfW - r);
+    if (Math.abs(b.position.z) > maxBallZ) {
+      b.position.z = Math.sign(b.position.z || 1) * maxBallZ;
       if (b.velocity.z * b.position.z > 0) b.velocity.z *= -bounce;
       b.wakeUp();
     }
 
-    if (Math.abs(b.position.x) > halfL - r && !inMouth) {
-      b.position.x = Math.sign(b.position.x || 1) * (halfL - r);
+    if (Math.abs(b.position.x) > maxBallX && !inMouth) {
+      b.position.x = Math.sign(b.position.x || 1) * maxBallX;
       if (b.velocity.x * b.position.x > 0) b.velocity.x *= -bounce;
       b.wakeUp();
     }
 
-    const pr = PLAYER.radius + 0.04;
     for (const p of this.players) {
-      p.body.position.z = THREE.MathUtils.clamp(p.body.position.z, -(halfW - pr), halfW - pr);
-      p.body.position.x = THREE.MathUtils.clamp(p.body.position.x, -(halfL - pr), halfL - pr);
+      const clamped = clampInsideBoards(p.body.position.x, p.body.position.z, PLAYER.boundsRadius);
+      if (p.body.position.x !== clamped.x || p.body.position.z !== clamped.z) {
+        p.body.position.x = clamped.x;
+        p.body.position.z = clamped.z;
+        p.body.velocity.x *= 0.35;
+        p.body.velocity.z *= 0.35;
+      }
     }
   }
 
@@ -777,6 +824,7 @@ export class Game {
     this.applyMagnus(dt);
     this.physics.world.step(1 / 60, dt, 3);
     this._dribbleLock = Math.max(0, this._dribbleLock - dt);
+    this.tickKickState(dt);
     this.guidePass(dt);
     this.containPlay();
     this.ballBody.position.y = Math.max(this.ballBody.position.y, BALL.radius);

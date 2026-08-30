@@ -354,7 +354,7 @@ export function createPitch(scene) {
   const sideBoard = (z, seed, seeThrough = false) => {
     const mats = graffitiWallMaterials(2048, 512, seed, "side");
     if (seeThrough) ghostMaterials(mats, 0.14);
-    const m = new THREE.Mesh(new THREE.BoxGeometry(PITCH.length + 0.4, boardH, 0.28), mats);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(PITCH.length + 0.4, boardH, PITCH.boardThickness), mats);
     m.position.set(0, boardH / 2, z);
     m.castShadow = !seeThrough;
     m.receiveShadow = !seeThrough;
@@ -362,8 +362,8 @@ export function createPitch(scene) {
     group.add(m);
     return m;
   };
-  sideBoard(halfW + 0.22, 11, true);
-  sideBoard(-halfW - 0.22, 29);
+  sideBoard(halfW + PITCH.boardCenterOffset, 11, true);
+  sideBoard(-halfW - PITCH.boardCenterOffset, 29);
 
   const mural = (w, h, seed, x, y, z, rotY, lean = 0, seeThrough = false) => {
     const mat = new THREE.MeshStandardMaterial({
@@ -391,10 +391,10 @@ export function createPitch(scene) {
     let n = 0;
     for (const side of [1, -1]) {
       const m = new THREE.Mesh(
-        new THREE.BoxGeometry(0.28, boardH, wing * 2 + 0.15),
+        new THREE.BoxGeometry(PITCH.boardThickness, boardH, wing * 2 + 0.15),
         graffitiWallMaterials(768, 512, 40 + sign * 7 + n, "end")
       );
-      m.position.set(sign * (halfL + 0.22), boardH / 2, side * z);
+      m.position.set(sign * (halfL + PITCH.boardCenterOffset), boardH / 2, side * z);
       m.castShadow = true;
       m.receiveShadow = true;
       group.add(m);

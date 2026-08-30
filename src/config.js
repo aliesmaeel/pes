@@ -33,16 +33,26 @@ export const PITCH = {
   goalDepth: 1.7,
   lineWidth: 0.12,
   wallHeight: 7.4,
+  /** Board box center offset beyond the touchline (matches pitch.js boards). */
+  boardCenterOffset: 0.22,
+  boardThickness: 0.28,
+  /** Distance from touchline to the playable-side face of the boards. */
+  get boardInset() {
+    return this.boardCenterOffset - this.boardThickness / 2;
+  },
 };
 
 export const BALL = {
   radius: 0.28,
   mass: 0.45,
   magnus: 0.022,
+  linearDamping: 0.12,
 };
 
 export const PLAYER = {
   radius: 0.42,
+  /** Horizontal mesh reach from body center (physics capsule + limbs). Used for wall clamping. */
+  boundsRadius: 0.64,
   height: 1.82,
   mass: 78,
   walkSpeed: 8.6,
@@ -58,14 +68,16 @@ export const PLAYER = {
   throughPower: 24,
   passArriveSpeed: 11,
   passMaxRange: 36,
-  shotPowerMin: 10,
-  shotPowerMax: 40,
+  shotPowerMin: 12,
+  shotPowerMax: 58,
   jumpSpeed: 5.8,
   tackleSpeed: 13.5,
   tackleDuration: 0.42,
   tackleCooldown: 1.35,
-  controlRadius: 2.05,
-  controlKeepRadius: 2.55,
+  /** Stand-up clip fit after slide tackle (Mixamo Standing Up). */
+  standUpDuration: 0.92,
+  controlRadius: 2.15,
+  controlKeepRadius: 2.75,
   stealRadius: 1.15,
   dribbleHold: 0.72,
   kickReach: 2.35,

@@ -39,8 +39,10 @@ export class Player {
     this.facing = team === "home" ? Math.PI / 2 : -Math.PI / 2;
     this.grounded = true;
     this.sliding = 0;
+    this.recovering = 0;
     this.tackleCd = 0;
     this.kickLock = 0;
+    this.kickKind = null;
     this.stun = 0;
     this.celebrating = false;
     this.lastShot = 0;
@@ -49,6 +51,8 @@ export class Player {
     this.whiffing = 0;
     this.home = new THREE.Vector3();
     this._groundContact = 0;
+    this._slideDirX = null;
+    this._slideDirZ = null;
     this.body.addEventListener("collide", (e) => {
       const n = e.contact.ni;
       const ny = this.body === e.contact.bi ? n.y : -n.y;
@@ -78,17 +82,22 @@ export class Player {
     this.charge = 0;
     this.charging = false;
     this.sliding = 0;
+    this.recovering = 0;
     this.tackleCd = 0;
     this.kickLock = 0;
+    this.kickKind = null;
     this.stun = 0;
     this.celebrating = false;
     this.whiffing = 0;
     this.wishX = 0;
     this.wishZ = 0;
     this._groundContact = 0;
+    this._slideDirX = null;
+    this._slideDirZ = null;
     this.grounded = true;
     this.facing = faceHomeGoal ? Math.PI / 2 : -Math.PI / 2;
     this.mesh.rotation.y = this.facing;
+    if (this.parts.rig) this.parts.rig.position.y = 0;
   }
 
   aimDir() {
@@ -98,7 +107,7 @@ export class Player {
   }
 
   applyInput(input, camera, dt) {
-    if (this.stun > 0 || this.sliding > 0) return { wishX: 0, wishZ: 0, sprinting: false };
+    if (this.stun > 0 || this.sliding > 0 || this.recovering > 0) return { wishX: 0, wishZ: 0, sprinting: false };
     _fwd.set(0, 0, 0);
     camera.getWorldDirection(_fwd);
     _fwd.y = 0;
@@ -124,6 +133,25 @@ export class Player {
     const v = this.body.velocity;
     if (this.sliding > 0) {
       this.sliding -= dt;
+      const dir =
+        this._slideDirX != null
+          ? { x: this._slideDirX, z: this._slideDirZ }
+          : this.faceDir();
+      const phase = Math.max(0, this.sliding / PLAYER.tackleDuration);
+      const speed = PLAYER.tackleSpeed * phase;
+      v.x = dir.x * speed;
+      v.z = dir.z * speed;
+      if (this.sliding <= 0) {
+        this._slideDirX = null;
+        this._slideDirZ = null;
+        if (this.recovering <= 0) this.recovering = PLAYER.standUpDuration;
+      }
+      return;
+    }
+    if (this.recovering > 0) {
+      this.recovering -= dt;
+      v.x *= 0.9;
+      v.z *= 0.9;
       return;
     }
     if (this.stun > 0) {
@@ -163,15 +191,17 @@ export class Player {
   }
 
   jump() {
-    if (!this.grounded || this.sliding > 0 || this.stun > 0) return false;
+    if (!this.grounded || this.sliding > 0 || this.recovering > 0 || this.stun > 0) return false;
     this.body.velocity.y = PLAYER.jumpSpeed;
     this.grounded = false;
     return true;
   }
 
   tackle() {
-    if (this.tackleCd > 0 || this.sliding > 0 || this.stun > 0 || !this.grounded) return false;
+    if (this.tackleCd > 0 || this.sliding > 0 || this.recovering > 0 || this.stun > 0 || !this.grounded) return false;
     const dir = this.aimDir();
+    this._slideDirX = dir.x;
+    this._slideDirZ = dir.z;
     this.body.velocity.x = dir.x * PLAYER.tackleSpeed;
     this.body.velocity.z = dir.z * PLAYER.tackleSpeed;
     this.sliding = PLAYER.tackleDuration;
@@ -180,7 +210,7 @@ export class Player {
   }
 
   startCharge() {
-    if (this.sliding > 0) return;
+    if (this.sliding > 0 || this.recovering > 0) return;
     this.charging = true;
     this.charge = 0;
   }
@@ -194,6 +224,7 @@ export class Player {
     const charge = this.charge / PLAYER.kickChargeMax;
     this.charging = false;
     this.charge = 0;
+    this.kickKind = "shot";
     this.kickLock = 0.35;
     this.lastShot += 1;
     return charge;
@@ -203,6 +234,9 @@ export class Player {
     const p = this.body.position;
     this.mesh.position.set(p.x, p.y, p.z);
     this.mesh.rotation.y = lerpAngle(this.mesh.rotation.y, this.facing, 1 - Math.exp(-12 * dt));
+    if (this.parts.rig) {
+      this.parts.rig.position.y = this.anim.slideDropY ?? 0;
+    }
     this.parts.marker.visible = !!controlled;
     this.parts.selectRing.visible = !!controlled;
     this.parts.charge.visible = this.charging;
@@ -214,10 +248,12 @@ export class Player {
       speed: this.speed(),
       vy: this.body.velocity.y,
       grounded: this.grounded,
-      kicking: this.kickLock > 0.12,
+      kicking: this.kickLock > 0 && this.kickKind === "shot",
+      passing: this.kickLock > 0 && (this.kickKind === "pass" || this.kickKind === "through"),
       charging: this.charging,
       charge: this.charge / PLAYER.kickChargeMax,
       sliding: this.sliding > 0,
+      recovering: this.recovering > 0,
       celebrating: this.celebrating,
     });
   }

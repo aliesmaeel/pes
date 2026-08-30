@@ -1,7 +1,9 @@
 import * as THREE from "three";
 import { PLAYER } from "../config.js";
-import { createPlayerMesh } from "./mesh.js";
+import { AnimationController } from "./animationController.js";
 import { Animator } from "./animator.js";
+import { createPlayerMesh } from "./mesh.js";
+import { createPlayerModel, isPlayerModelReady } from "./playerModel.js";
 
 const _fwd = new THREE.Vector3();
 const _right = new THREE.Vector3();
@@ -23,9 +25,14 @@ export class Player {
     this.human = human;
     this.pad = pad ?? 0;
     this.number = number;
-    this.parts = createPlayerMesh({ kit, number });
+    if (isPlayerModelReady()) {
+      this.parts = createPlayerModel({ kit, number });
+      this.anim = new AnimationController(this.parts);
+    } else {
+      this.parts = createPlayerMesh({ kit, number });
+      this.anim = new Animator(this.parts);
+    }
     this.mesh = this.parts.root;
-    this.anim = new Animator(this.parts);
     this.stamina = PLAYER.staminaMax;
     this.charge = 0;
     this.charging = false;
@@ -208,6 +215,8 @@ export class Player {
       vy: this.body.velocity.y,
       grounded: this.grounded,
       kicking: this.kickLock > 0.12,
+      charging: this.charging,
+      charge: this.charge / PLAYER.kickChargeMax,
       sliding: this.sliding > 0,
       celebrating: this.celebrating,
     });

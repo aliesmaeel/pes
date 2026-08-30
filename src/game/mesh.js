@@ -83,6 +83,22 @@ export function createPlayerMesh({ kit, number, skin = 0xc68642 }) {
   num.position.set(0, 0.34, -0.145);
   hips.add(num);
 
+  const overlays = attachPlayerOverlays(root, { number, markerY: 2.35 });
+
+  return {
+    root,
+    hips,
+    torso,
+    head,
+    leftArm,
+    rightArm,
+    leftLeg,
+    rightLeg,
+    ...overlays,
+  };
+}
+
+export function attachPlayerOverlays(root, { number, markerY = 2.15 } = {}) {
   const shadow = new THREE.Mesh(
     new THREE.CircleGeometry(0.46, 16),
     new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3, depthWrite: false })
@@ -95,7 +111,7 @@ export function createPlayerMesh({ kit, number, skin = 0xc68642 }) {
     new THREE.ConeGeometry(0.18, 0.32, 4),
     new THREE.MeshBasicMaterial({ color: 0xfacc15 })
   );
-  marker.position.y = 2.35;
+  marker.position.y = markerY;
   marker.rotation.x = Math.PI;
   marker.visible = false;
   root.add(marker);
@@ -127,19 +143,5 @@ export function createPlayerMesh({ kit, number, skin = 0xc68642 }) {
   charge.visible = false;
   root.add(charge);
 
-  return {
-    root,
-    hips,
-    torso,
-    head,
-    leftArm,
-    rightArm,
-    leftLeg,
-    rightLeg,
-    marker,
-    selectRing,
-    passTarget,
-    charge,
-    shadow,
-  };
+  return { marker, selectRing, passTarget, charge, shadow };
 }
